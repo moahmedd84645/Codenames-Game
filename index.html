@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لعبة أسماء حركية (أونلاين)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Cairo', sans-serif; background-color: #1f2937; color: #f9fafb; }
+        .card { transition: all 0.3s ease; transform-style: preserve-3d; }
+        .card.is-flipped { transform: rotateX(180deg); }
+        .card-face { backface-visibility: hidden; -webkit-backface-visibility: hidden; position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; text-align: center; padding: 0.5rem; border-radius: 0.5rem; }
+        .card-front { background-color: #ffffff; color: #111827; border: 2px solid #6b7280; }
+        .card-back { transform: rotateX(180deg); color: white; font-weight: bold; }
+        .bg-red-agent { background-color: #ef4444; }
+        .bg-blue-agent { background-color: #3b82f6; }
+        .bg-neutral-agent { background-color: #a16207; }
+        .bg-assassin-agent { background-color: #111827; }
+        .spymaster-view .card-front { position: relative; }
+        .spymaster-view .card-front::after { content: ''; position: absolute; top:0; left:0; right:0; bottom:0; border-radius: 0.375rem; border: 5px solid; }
+        .spymaster-view .card-front.red-border::after { border-color: #ef4444; }
+        .spymaster-view .card-front.blue-border::after { border-color: #3b82f6; }
+        .spymaster-view .card-front.neutral-border::after { border-color: #a16207; }
+        .spymaster-view .card-front.assassin-border::after { border-color: #111827; }
+    </style>
+</head>
+<body class="p-4 sm:p-6">
+
+    <div class="max-w-5xl mx-auto">
+        <!-- شاشة البداية -->
+        <div id="startScreen">
+            <div class="bg-gray-700 p-8 rounded-xl shadow-2xl text-center max-w-lg mx-auto">
+                <h1 class="text-4xl font-black mb-4">أسماء حركية أونلاين</h1>
+                <p class="mb-6 text-gray-300">العب مع أصدقائك في الوقت الفعلي!</p>
+                <input type="text" id="playerNameInput" placeholder="أدخل اسمك" class="w-full p-3 rounded-lg bg-gray-600 text-white border-2 border-gray-500 mb-4 focus:border-blue-500 focus:outline-none">
+                <button id="createGameBtn" class="w-full mb-4 px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg text-lg hover:bg-blue-600 transition">إنشاء لعبة جديدة</button>
+                <div class="flex items-center gap-4">
+                    <input type="text" id="joinGameIdInput" placeholder="أدخل رمز اللعبة" class="flex-grow p-3 rounded-lg bg-gray-600 text-white border-2 border-gray-500 focus:border-green-500 focus:outline-none">
+                    <button id="joinGameBtn" class="px-6 py-3 bg-green-500 text-white font-semibold rounded-lg hover:bg-green-600 transition">انضمام</button>
+                </div>
+                <p id="start-error" class="text-red-400 mt-4 h-5"></p>
+            </div>
+        </div>
+
+        <!-- شاشة اللعبة الرئيسية (تتضمن اللوبي واللعب) -->
+        <div id="gameScreen" class="hidden">
+            <!-- الشريط العلوي -->
+            <div class="flex flex-col sm:flex-row justify-between items-center mb-4">
+                 <div id="gameIdDisplay" class="text-lg font-mono bg-gray-900 p-2 rounded cursor-pointer" title="اضغط لنسخ رمز اللعبة"></div>
+                 <button id="leaveGameBtn" class="px-4 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-500">مغادرة اللعبة</button>
+            </div>
+            
+            <!-- لوحة النقاط والتلميح -->
+            <div class="grid grid-cols-3 gap-4 text-center mb-4 bg-gray-700 p-4 rounded-xl items-center">
+                <div class="text-blue-400"><h2 class="text-3xl font-bold" id="blueScore">0</h2><p>الفريق الأزرق</p></div>
+                <div id="clueArea" class="bg-gray-800 p-3 rounded-lg"><h2 class="text-2xl font-bold" id="clueText">في انتظار التلميح...</h2></div>
+                <div class="text-red-400"><h2 class="text-3xl font-bold" id="redScore">0</h2><p>الفريق الأحمر</p></div>
+            </div>
+
+            <!-- لوحة التحكم -->
+            <div id="controls" class="mb-4 p-3 bg-gray-700 rounded-lg flex flex-col sm:flex-row gap-4 justify-center items-center">
+                <!-- تحكم رئيس الجواسيس -->
+                <div id="spymasterControls" class="hidden items-center gap-2">
+                    <input type="text" id="clueWordInput" placeholder="التلميح" class="p-2 rounded bg-gray-600 text-white border border-gray-500">
+                    <input type="number" id="clueNumberInput" min="1" max="8" placeholder="العدد" class="p-2 w-20 rounded bg-gray-600 text-white border border-gray-500">
+                    <button id="giveClueBtn" class="px-4 py-2 bg-yellow-500 text-black font-bold rounded-lg">أعطِ التلميح</button>
+                </div>
+                <!-- تحكم الفريق -->
+                <div id="operativeControls" class="hidden items-center gap-2">
+                    <button id="endTurnBtn" class="px-6 py-2 bg-gray-500 text-white font-bold rounded-lg">إنهاء الدور</button>
+                </div>
+            </div>
+
+            <!-- لوحة اللعب -->
+            <div id="board" class="grid grid-cols-5 gap-2 sm:gap-4 mb-6"></div>
+
+             <!-- منطقة اللاعبين -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div id="blueTeam" class="bg-blue-900/50 p-4 rounded-lg"></div>
+                <div id="redTeam" class="bg-red-900/50 p-4 rounded-lg"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot, updateDoc, deleteField } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+
+        // --- عناصر الواجهة ---
+        const startScreen = document.getElementById('startScreen');
+        const gameScreen = document.getElementById('gameScreen');
+        const boardEl = document.getElementById('board');
+        const playerNameInput = document.getElementById('playerNameInput');
+        const createGameBtn = document.getElementById('createGameBtn');
+        const joinGameIdInput = document.getElementById('joinGameIdInput');
+        const joinGameBtn = document.getElementById('joinGameBtn');
+        const startErrorEl = document.getElementById('start-error');
+        const gameIdDisplay = document.getElementById('gameIdDisplay');
+        const leaveGameBtn = document.getElementById('leaveGameBtn');
+        const blueScoreEl = document.getElementById('blueScore');
+        const redScoreEl = document.getElementById('redScore');
+        const clueTextEl = document.getElementById('clueText');
+        const spymasterControls = document.getElementById('spymasterControls');
+        const operativeControls = document.getElementById('operativeControls');
+        const clueWordInput = document.getElementById('clueWordInput');
+        const clueNumberInput = document.getElementById('clueNumberInput');
+        const giveClueBtn = document.getElementById('giveClueBtn');
+        const endTurnBtn = document.getElementById('endTurnBtn');
+        const blueTeamEl = document.getElementById('blueTeam');
+        const redTeamEl = document.getElementById('redTeam');
+        
+        // --- إعداد Firebase ---
+        const firebaseConfig = {
+          apiKey: "AIzaSyCSdCb3OR0r618wtk4v0YMmpURuVJLGmGs",
+          authDomain: "codenames-56ad3.firebaseapp.com",
+          projectId: "codenames-56ad3",
+          storageBucket: "codenames-56ad3.appspot.com",
+          messagingSenderId: "963018410974",
+          appId: "1:963018410974:web:ae78c5bd7478850768ab4f",
+          measurementId: "G-KD4G1Q4B1G"
+        };
+        const appId = 'codenames-56ad3'; // Using your project ID for the database path
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        
+        let user, gameUnsubscribe, currentGameId;
+
+        // --- مصادقة المستخدم ---
+        // FIX: Added a try-catch block to handle authentication errors gracefully.
+        async function initializeAuth() {
+            try {
+                // Try to sign in. The onAuthStateChanged listener below will handle the successful result.
+                await signInAnonymously(auth);
+            } catch (error) {
+                // If sign-in fails, check for the specific configuration error.
+                if (error.code === 'auth/configuration-not-found' || error.code === 'auth/operation-not-allowed') {
+                    alert('خطأ في إعداد Firebase:\n\nالرجاء تفعيل "تسجيل الدخول المجهول" (Anonymous sign-in) في لوحة تحكم مشروعك على Firebase.\n\nاذهب إلى: Firebase Console -> Authentication -> Sign-in method -> ثم قم بتفعيل Anonymous.');
+                } else {
+                    // For any other auth errors, log them to the console.
+                    console.error("Firebase Auth Error:", error);
+                    alert('حدث خطأ غير متوقع أثناء محاولة المصادقة.');
+                }
+            }
+        }
+
+        onAuthStateChanged(auth, (u) => {
+            if (u) { 
+                // This will be triggered after a successful signInAnonymously call.
+                user = u; 
+            }
+        });
+        
+        // Call the authentication function when the script loads.
+        initializeAuth();
+
+        // --- منطق اللعبة ---
+        const words = ["مصر", "نهر", "جمل", "هرم", "صحراء", "قمر", "شمس", "تفاح", "موز", "قطار", "سيارة", "طبيب", "مهندس", "مدرسة", "كتاب", "فيل", "أسد", "بحر", "جسر", "قلعة", "ملك", "فضاء", "نجمة", "سحابة", "مطر", "وقت", "ساعة", "مفتاح", "باب", "صندوق"];
+
+        async function createNewGame() {
+            if (!validateInputs()) return;
+            const gameId = Math.random().toString(36).substring(2, 7).toUpperCase();
+            const gameRef = doc(db, `artifacts/${appId}/public/data/codenames-games`, gameId);
+
+            words.sort(() => Math.random() - 0.5);
+            const gameWords = words.slice(0, 25);
+            const startingTeam = Math.random() < 0.5 ? 'blue' : 'red';
+            const keyMap = generateKeyMap(startingTeam);
+
+            const gameData = {
+                words: gameWords,
+                keyMap: keyMap,
+                revealed: Array(25).fill(false),
+                players: {},
+                state: 'lobby', // lobby, playing, finished
+                turn: startingTeam,
+                scores: { blue: startingTeam === 'blue' ? 9 : 8, red: startingTeam === 'red' ? 9 : 8 },
+                clue: { word: '', number: 0 },
+                guessesLeft: 0
+            };
+            gameData.players[user.uid] = { name: playerNameInput.value, team: null, role: null };
+            
+            await setDoc(gameRef, gameData);
+            joinGame(gameId);
+        }
+
+        async function joinGame(gameIdOverride = null) {
+            if (!validateInputs()) return;
+            const gameId = (gameIdOverride || joinGameIdInput.value.toUpperCase().trim());
+            if (!gameId) { showError("الرجاء إدخال رمز اللعبة"); return; }
+            
+            const gameRef = doc(db, `artifacts/${appId}/public/data/codenames-games`, gameId);
+            const gameSnap = await getDoc(gameRef);
+
+            if (gameSnap.exists()) {
+                currentGameId = gameId;
+                const updatePath = `players.${user.uid}`;
+                await updateDoc(gameRef, { [updatePath]: { name: playerNameInput.value, team: null, role: null } });
+                
+                startScreen.classList.add('hidden');
+                gameScreen.classList.remove('hidden');
+
+                if (gameUnsubscribe) gameUnsubscribe();
+                gameUnsubscribe = onSnapshot(gameRef, renderGame);
+            } else {
+                showError("لم يتم العثور على لعبة بهذا الرمز.");
+            }
+        }
+        
+        function renderGame(docSnap) {
+            if (!docSnap.exists()) {
+                if (gameScreen.classList.contains('hidden')) return;
+                alert("تم حذف اللعبة!");
+                leaveGame();
+                return;
+            }
+            const game = docSnap.data();
+            const me = game.players[user.uid];
+            
+            if (!me) {
+                leaveGame();
+                return;
+            }
+
+            renderPlayers(game.players);
+            renderBoard(game, me);
+            
+            blueScoreEl.textContent = game.scores.blue;
+            redScoreEl.textContent = game.scores.red;
+            gameIdDisplay.textContent = currentGameId;
+            
+            updateControls(game, me);
+            updateClueArea(game);
+        }
+
+        function renderPlayers(players) {
+            blueTeamEl.innerHTML = '<h3 class="text-xl font-bold text-blue-300 mb-2">الفريق الأزرق</h3>';
+            redTeamEl.innerHTML = '<h3 class="text-xl font-bold text-red-300 mb-2">الفريق الأحمر</h3>';
+
+            for (const uid in players) {
+                const p = players[uid];
+                const playerEl = document.createElement('div');
+                playerEl.className = 'flex justify-between items-center bg-gray-800 p-2 rounded mb-2';
+                
+                let content;
+                if (p.team === null) {
+                    content = `<span class="font-bold">${p.name}</span>
+                               <div>
+                                 <button data-uid="${uid}" data-team="blue" class="change-team-btn px-2 py-1 bg-blue-600 rounded">الأزرق</button>
+                                 <button data-uid="${uid}" data-team="red" class="change-team-btn px-2 py-1 bg-red-600 rounded">الأحمر</button>
+                               </div>`;
+                } else {
+                    const roleText = p.role === 'spymaster' ? ' (رئيس الجواسيس)' : ' (عضو فريق)';
+                    content = `<span class="font-bold">${p.name}${roleText}</span>
+                               <button data-uid="${uid}" data-role="${p.role === 'spymaster' ? 'operative' : 'spymaster'}" class="change-role-btn px-2 py-1 bg-yellow-600 rounded">
+                                 ${p.role === 'spymaster' ? 'كن عضو فريق' : 'كن رئيسًا'}
+                               </button>`;
+                }
+                playerEl.innerHTML = content;
+                
+                const targetTeamEl = p.team === 'blue' ? blueTeamEl : (p.team === 'red' ? redTeamEl : (Object.keys(players).length % 2 === 0 ? redTeamEl : blueTeamEl));
+                targetTeamEl.appendChild(playerEl);
+            }
+        }
+        
+        function renderBoard(game, me) {
+            boardEl.innerHTML = '';
+            const isSpymaster = me.role === 'spymaster';
+            boardEl.className = `grid grid-cols-5 gap-2 sm:gap-4 mb-6 ${isSpymaster ? 'spymaster-view' : ''}`;
+            
+            game.words.forEach((word, i) => {
+                const identity = game.keyMap[i];
+                const isRevealed = game.revealed[i];
+                
+                const cardWrapper = document.createElement('div');
+                cardWrapper.className = 'relative h-20 sm:h-24';
+
+                const card = document.createElement('div');
+                card.className = `card w-full h-full ${isRevealed ? 'is-flipped' : ''}`;
+                if (!isRevealed && me.role === 'operative' && game.turn === me.team && game.state === 'playing' && game.guessesLeft > 0) {
+                     card.classList.add('cursor-pointer');
+                }
+
+                const cardFront = document.createElement('div');
+                cardFront.className = 'card-face card-front font-bold text-lg';
+                if(isSpymaster) cardFront.classList.add(`${identity}-border`);
+                cardFront.textContent = word;
+
+                const cardBack = document.createElement('div');
+                cardBack.className = `card-face card-back bg-${identity}-agent`;
+                cardBack.textContent = word;
+
+                card.appendChild(cardFront);
+                card.appendChild(cardBack);
+                cardWrapper.appendChild(card);
+                boardEl.appendChild(cardWrapper);
+
+                cardWrapper.addEventListener('click', () => handleCardClick(i, game, me));
+            });
+        }
+        
+        function updateControls(game, me) {
+             spymasterControls.classList.add('hidden');
+             operativeControls.classList.add('hidden');
+             const canGiveClue = me.role === 'spymaster' && me.team === game.turn && game.state === 'playing' && game.clue.number === 0;
+             const canEndTurn = me.role === 'operative' && me.team === game.turn && game.state === 'playing' && game.clue.number > 0;
+             if (canGiveClue) spymasterControls.classList.remove('hidden');
+             if (canEndTurn) operativeControls.classList.remove('hidden');
+        }
+
+        function updateClueArea(game) {
+            if (game.state === 'finished') {
+                 clueTextEl.textContent = `الفريق ${game.winner} فاز!`;
+            } else if(game.clue.number > 0) {
+                 clueTextEl.textContent = `"${game.clue.word}": ${game.clue.number} (تبقى ${game.guessesLeft} تخمين)`;
+            } else {
+                 clueTextEl.textContent = `في انتظار تلميح الفريق ${game.turn === 'blue' ? 'الأزرق' : 'الأحمر'}`;
+            }
+        }
+
+        async function handleCardClick(index, game, me) {
+            if (game.state !== 'playing' || me.role !== 'operative' || me.team !== game.turn || game.revealed[index] || game.guessesLeft <= 0) return;
+
+            const gameRef = doc(db, `artifacts/${appId}/public/data/codenames-games`, currentGameId);
+            const identity = game.keyMap[index];
+            const newRevealed = [...game.revealed];
+            newRevealed[index] = true;
+            
+            const updates = { revealed: newRevealed };
+            let newScores = {...game.scores};
+
+            if (identity === 'assassin') {
+                updates.state = 'finished';
+                updates.winner = me.team === 'blue' ? 'red' : 'blue';
+            } else {
+                if (identity === 'blue') newScores.blue--;
+                if (identity === 'red') newScores.red--;
+                updates.scores = newScores;
+
+                if (newScores.blue === 0) {
+                    updates.state = 'finished';
+                    updates.winner = 'blue';
+                } else if (newScores.red === 0) {
+                    updates.state = 'finished';
+                    updates.winner = 'red';
+                } else if (identity !== me.team) {
+                    updates.turn = me.team === 'blue' ? 'red' : 'blue';
+                    updates.clue = { word: '', number: 0 };
+                    updates.guessesLeft = 0;
+                } else {
+                    updates.guessesLeft = game.guessesLeft - 1;
+                    if(updates.guessesLeft === 0) {
+                         updates.turn = me.team === 'blue' ? 'red' : 'blue';
+                         updates.clue = { word: '', number: 0 };
+                    }
+                }
+            }
+            await updateDoc(gameRef, updates);
+        }
+
+        createGameBtn.addEventListener('click', createNewGame);
+        joinGameBtn.addEventListener('click', () => joinGame());
+        
+        document.addEventListener('click', async (e) => {
+            if (!currentGameId) return; 
+            const gameRef = doc(db, `artifacts/${appId}/public/data/codenames-games`, currentGameId);
+            if (e.target.matches('.change-team-btn')) {
+                const { uid, team } = e.target.dataset;
+                await updateDoc(gameRef, { [`players.${uid}.team`]: team });
+            }
+            if (e.target.matches('.change-role-btn')) {
+                 const { uid, role } = e.target.dataset;
+                 await updateDoc(gameRef, { [`players.${uid}.role`]: role });
+            }
+        });
+        
+        giveClueBtn.addEventListener('click', async () => {
+            const word = clueWordInput.value.trim();
+            const number = parseInt(clueNumberInput.value);
+            if (!word || !number || number < 1) { alert("أدخل تلميحًا صحيحًا"); return; }
+            const gameRef = doc(db, `artifacts/${appId}/public/data/codenames-games`, currentGameId);
+            await updateDoc(gameRef, { clue: { word, number }, guessesLeft: number + 1 });
+            clueWordInput.value = '';
+            clueNumberInput.value = '';
+        });
+
+        endTurnBtn.addEventListener('click', async () => {
+            const gameRef = doc(db, `artifacts/${appId}/public/data/codenames-games`, currentGameId);
+            const gameSnap = await getDoc(gameRef);
+            const game = gameSnap.data();
+            await updateDoc(gameRef, {
+                 turn: game.turn === 'blue' ? 'red' : 'blue',
+                 clue: {word: '', number: 0},
+                 guessesLeft: 0
+            });
+        });
+        
+        leaveGameBtn.addEventListener('click', async () => {
+            if (!currentGameId || !user) return;
+            const gameRef = doc(db, `artifacts/${appId}/public/data/codenames-games`, currentGameId);
+            await updateDoc(gameRef, { [`players.${user.uid}`]: deleteField() });
+            leaveGame();
+        });
+
+        function leaveGame() {
+             if (gameUnsubscribe) gameUnsubscribe();
+             gameScreen.classList.add('hidden');
+             startScreen.classList.remove('hidden');
+             currentGameId = null;
+             gameUnsubscribe = null;
+        }
+
+        function generateKeyMap(startingTeam) {
+            const identities = [ 'assassin' ];
+            for (let i = 0; i < 7; i++) identities.push('neutral');
+            for (let i = 0; i < 8; i++) identities.push(startingTeam === 'blue' ? 'red' : 'blue');
+            for (let i = 0; i < 9; i++) identities.push(startingTeam);
+            return identities.sort(() => Math.random() - 0.5);
+        }
+        function validateInputs() {
+            if (!playerNameInput.value.trim()) { showError("الرجاء إدخال اسمك."); return false; }
+            if(!user) { showError("خطأ في المصادقة، حاول تحديث الصفحة."); return false; }
+            return true;
+        }
+        function showError(msg) { startErrorEl.textContent = msg; setTimeout(() => startErrorEl.textContent = '', 3000); }
+
+        gameIdDisplay.addEventListener('click', () => {
+            if (!currentGameId) return;
+            const textToCopy = currentGameId;
+            const textArea = document.createElement("textarea");
+            textArea.style.position = 'fixed';
+            textArea.style.top = '-9999px';
+            textArea.style.left = '-9999px';
+            textArea.value = textToCopy;
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                const originalText = gameIdDisplay.textContent;
+                gameIdDisplay.textContent = "تم النسخ!";
+                setTimeout(() => { 
+                    if (gameIdDisplay.textContent === "تم النسخ!") {
+                       gameIdDisplay.textContent = originalText;
+                    }
+                }, 1500);
+            } catch (err) {
+                console.error('Fallback: Oops, unable to copy', err);
+            }
+            document.body.removeChild(textArea);
+        });
+    </script>
+</body>
+</html>
