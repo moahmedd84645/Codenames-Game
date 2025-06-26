@@ -62,7 +62,7 @@
                 
                 <div class="grid grid-cols-3 gap-4 text-center mb-4 bg-black/30 p-4 rounded-xl items-center">
                     <div class="text-blue-400"><h2 class="text-4xl font-black" id="blueScore">0</h2><p class="font-bold">Blue Team</p></div>
-                    <div id="clueArea" class="bg-gray-900 p-3 rounded-lg"><h2 class="text-2xl font-bold" id="clueText">في انتظار بدء اللعبة...</h2></div>
+                    <div id="clueArea" class="bg-gray-900 p-3 rounded-lg min-h-[80px] flex flex-col justify-center"><h2 class="text-2xl font-bold" id="clueText">في انتظار بدء اللعبة...</h2></div>
                     <div class="text-red-400"><h2 class="text-4xl font-black" id="redScore">0</h2><p class="font-bold">Red Team</p></div>
                 </div>
 
@@ -258,31 +258,62 @@
             spymasterControls.classList.add('hidden');
             operativeControls.classList.add('hidden');
             
-            // Background Color
-            gameContainer.className = game.state === 'playing' ? `bg-${game.turn}-turn` : 'bg-neutral-turn';
+            gameContainer.className = `min-h-screen p-4 sm:p-6 ${(game.state === 'playing' ? `bg-${game.turn}-turn` : 'bg-neutral-turn')}`;
 
             if (game.state === 'lobby') {
                 lobbyControls.classList.remove('hidden');
                 clueTextEl.textContent = "اللاعبون يختارون الفرق...";
+                const oldNote = document.getElementById('solo-test-note');
+                if (oldNote) oldNote.remove();
+
                 if (user.uid === game.hostId) {
                     startGameBtn.classList.remove('hidden');
                     waitingForHost.classList.add('hidden');
                     const { blueSpymaster, redSpymaster, bluePlayers, redPlayers } = checkTeamComposition(game.players);
-                    startGameBtn.disabled = !(blueSpymaster && redSpymaster && bluePlayers > 0 && redPlayers > 0);
+                    const teamsAreReady = blueSpymaster && redSpymaster && bluePlayers >= 2 && redPlayers >= 2;
+                    
+                    if (teamsAreReady) {
+                        startGameBtn.disabled = false;
+                    } else if (Object.keys(game.players).length === 1) {
+                        startGameBtn.disabled = false;
+                        const note = document.createElement('p');
+                        note.id = 'solo-test-note';
+                        note.className = 'text-sm text-gray-400 mt-2';
+                        note.textContent = 'يمكنك بدء اللعبة وحدك للتجربة.';
+                        lobbyControls.appendChild(note);
+                    } else {
+                        startGameBtn.disabled = true;
+                    }
                 } else {
                     startGameBtn.classList.add('hidden');
                     waitingForHost.classList.remove('hidden');
                 }
             } else if (game.state === 'playing') {
-                const canGiveClue = me.role === 'spymaster' && me.team === game.turn && game.clue.number === 0;
-                const canEndTurn = me.role === 'operative' && me.team === game.turn && game.clue.number > 0;
-                if (canGiveClue) spymasterControls.classList.remove('hidden');
-                if (canEndTurn) operativeControls.classList.remove('hidden');
+                const isSoloTest = Object.keys(game.players).length === 1;
+                if (isSoloTest && me.team === game.turn) {
+                    spymasterControls.classList.remove('hidden');
+                    operativeControls.classList.remove('hidden');
+                } else {
+                    const canGiveClue = me.role === 'spymaster' && me.team === game.turn && game.clue.number === 0;
+                    const canEndTurn = me.role === 'operative' && me.team === game.turn && game.clue.number > 0;
+                    if (canGiveClue) spymasterControls.classList.remove('hidden');
+                    if (canEndTurn) operativeControls.classList.remove('hidden');
+                }
                 
                 if (game.clue.number > 0) clueTextEl.innerHTML = `<span class="font-mono text-2xl">"${game.clue.word}": ${game.clue.number}</span><br>تبقى ${game.guessesLeft} تخمين`;
                 else clueTextEl.textContent = `في انتظار تلميح الفريق ${game.turn === 'blue' ? 'الأزرق' : 'الأحمر'}`;
             } else if (game.state === 'finished') {
-                clueTextEl.textContent = `الفريق ${game.winner === 'blue' ? 'الأزرق' : 'الأحمر'} فاز!`;
+                clueTextEl.innerHTML = `الفريق <strong class="text-yellow-300">${game.winner === 'blue' ? 'الأزرق' : 'الأحمر'}</strong> فاز!`;
+                if (user.uid === game.hostId) {
+                    const restartBtn = document.createElement('button');
+                    restartBtn.id = 'restartGameBtn';
+                    restartBtn.className = 'mt-2 px-6 py-2 bg-green-600 rounded block mx-auto hover:bg-green-500';
+                    restartBtn.textContent = 'لعبة جديدة';
+                    if(!document.getElementById('restartGameBtn')) {
+                        clueTextEl.appendChild(restartBtn);
+                        restartBtn.addEventListener('click', restartGame);
+                    }
+                }
             }
         }
         
@@ -316,6 +347,27 @@
             }
             await updateDoc(gameRef, updates);
         }
+        
+        async function restartGame() {
+            if (!currentGameId) return;
+            const gameRef = doc(db, `artifacts/${appId}/public/data/codenames-games`, currentGameId);
+            const oldGameSnap = await getDoc(gameRef);
+            const oldGameData = oldGameSnap.data();
+
+            const startingTeam = Math.random() < 0.5 ? 'blue' : 'red';
+            const newGameData = {
+                ...oldGameData, // Keep players and hostId
+                words: words.sort(() => Math.random() - 0.5).slice(0, 25),
+                keyMap: generateKeyMap(startingTeam),
+                revealed: Array(25).fill(false),
+                state: 'lobby',
+                turn: startingTeam,
+                scores: { blue: startingTeam === 'blue' ? 9 : 8, red: startingTeam === 'red' ? 9 : 8 },
+                clue: { word: '', number: 0 },
+                guessesLeft: 0,
+            };
+            await setDoc(gameRef, newGameData);
+        }
 
         document.addEventListener('click', async (e) => {
             if (!currentGameId || !user) return; 
@@ -346,7 +398,7 @@
         function leaveGame() {
             if (gameUnsubscribe) gameUnsubscribe();
             gameScreen.classList.add('hidden'); startScreen.classList.remove('hidden');
-            gameContainer.className = 'bg-neutral-turn';
+            gameContainer.className = 'bg-neutral-turn min-h-screen p-4 sm:p-6';
             currentGameId = null; gameUnsubscribe = null;
         }
 
@@ -362,4 +414,4 @@
         });
     </script>
 </body>
-</html>
+</ht
