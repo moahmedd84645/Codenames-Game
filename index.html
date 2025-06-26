@@ -147,7 +147,6 @@
         onAuthStateChanged(auth, (u) => { 
             if (u) { 
                 user = u;
-                // Enable buttons and update text once user is authenticated
                 createGameBtn.disabled = false;
                 createGameBtn.textContent = 'Create New Game';
                 joinGameBtn.disabled = false;
@@ -178,8 +177,14 @@
                 guessesLeft: 0
             };
             gameData.players[user.uid] = { name: playerName, team: null, role: null };
-            await setDoc(gameRef, gameData);
-            joinGame(gameId);
+            
+            try {
+                await setDoc(gameRef, gameData);
+                joinGame(gameId);
+            } catch (error) {
+                console.error("Error creating game:", error);
+                alert(`فشل إنشاء اللعبة. قد تكون المشكلة في قواعد الأمان بقاعدة البيانات.\n\nرسالة الخطأ:\n${error.message}`);
+            }
         }
 
         async function joinGame(gameIdOverride = null) {
@@ -189,15 +194,21 @@
             const gameId = (gameIdOverride || joinGameIdInput.value.toUpperCase().trim());
             if (!gameId) { showError("Please enter a game code."); return; }
             const gameRef = doc(db, `artifacts/${appId}/public/data/codenames-games`, gameId);
-            const gameSnap = await getDoc(gameRef);
-            if (gameSnap.exists()) {
-                currentGameId = gameId;
-                await updateDoc(gameRef, { [`players.${user.uid}`]: { name: playerName, team: null, role: null } });
-                startScreen.classList.add('hidden');
-                gameScreen.classList.remove('hidden');
-                if (gameUnsubscribe) gameUnsubscribe();
-                gameUnsubscribe = onSnapshot(gameRef, renderGame);
-            } else { showError("Game with this code not found."); }
+            
+            try {
+                const gameSnap = await getDoc(gameRef);
+                if (gameSnap.exists()) {
+                    currentGameId = gameId;
+                    await updateDoc(gameRef, { [`players.${user.uid}`]: { name: playerName, team: null, role: null } });
+                    startScreen.classList.add('hidden');
+                    gameScreen.classList.remove('hidden');
+                    if (gameUnsubscribe) gameUnsubscribe();
+                    gameUnsubscribe = onSnapshot(gameRef, renderGame);
+                } else { showError("Game with this code not found."); }
+            } catch (error) {
+                 console.error("Error joining game:", error);
+                alert(`فشل الانضمام للعبة. تأكد من صحة الرمز وقواعد الأمان.\n\nرسالة الخطأ:\n${error.message}`);
+            }
         }
         
         function renderGame(docSnap) {
