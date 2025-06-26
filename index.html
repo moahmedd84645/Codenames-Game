@@ -43,11 +43,11 @@
                 <div class="bg-gray-800 p-8 rounded-xl shadow-2xl text-center max-w-lg mx-auto mt-10">
                     <h1 class="text-4xl font-black mb-4">أسماء حركية أونلاين</h1>
                     <p class="mb-6 text-gray-300">العب مع أصدقائك في الوقت الفعلي!</p>
-                    <input type="text" id="playerNameInput" placeholder="Enter Your Name" class="w-full p-3 rounded-lg bg-gray-700 text-white border-2 border-gray-600 mb-4 focus:border-blue-500 focus:outline-none text-center">
-                    <button id="createGameBtn" class="w-full mb-4 px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg text-lg hover:bg-blue-500 transition disabled:bg-blue-900 disabled:cursor-not-allowed" disabled>Create New Game</button>
+                    <input type="text" id="playerNameInput" placeholder="Enter Your Name (Optional)" class="w-full p-3 rounded-lg bg-gray-700 text-white border-2 border-gray-600 mb-4 focus:border-blue-500 focus:outline-none text-center">
+                    <button id="createGameBtn" class="w-full mb-4 px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg text-lg hover:bg-blue-500 transition disabled:bg-blue-900 disabled:cursor-not-allowed" disabled>Connecting...</button>
                     <div class="flex items-center gap-4">
                         <input type="text" id="joinGameIdInput" placeholder="Enter Game Code" class="flex-grow p-3 rounded-lg bg-gray-700 text-white border-2 border-gray-600 focus:border-green-500 focus:outline-none text-center">
-                        <button id="joinGameBtn" class="px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-500 transition disabled:bg-green-900 disabled:cursor-not-allowed" disabled>Join</button>
+                        <button id="joinGameBtn" class="px-6 py-3 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-500 transition disabled:bg-green-900 disabled:cursor-not-allowed" disabled>Connecting...</button>
                     </div>
                     <p id="start-error" class="text-red-400 mt-4 h-5"></p>
                 </div>
@@ -147,9 +147,11 @@
         onAuthStateChanged(auth, (u) => { 
             if (u) { 
                 user = u;
-                // Enable buttons once user is authenticated
+                // Enable buttons and update text once user is authenticated
                 createGameBtn.disabled = false;
+                createGameBtn.textContent = 'Create New Game';
                 joinGameBtn.disabled = false;
+                joinGameBtn.textContent = 'Join';
             } 
         });
         initializeAuth();
@@ -157,7 +159,9 @@
         const words = ["مصر", "نهر", "جمل", "هرم", "صحراء", "قمر", "شمس", "تفاح", "موز", "قطار", "سيارة", "طبيب", "مهندس", "مدرسة", "كتاب", "فيل", "أسد", "بحر", "جسر", "قلعة", "ملك", "فضاء", "نجمة", "سحابة", "مطر", "وقت", "ساعة", "مفتاح", "باب", "صندوق"];
 
         async function createNewGame() {
-            if (!validateInputs()) return;
+            if (!user) { showError("Connecting... please wait a moment."); return; }
+            const playerName = playerNameInput.value.trim() || `Player${Math.floor(Math.random() * 900) + 100}`;
+            
             const gameId = Math.random().toString(36).substring(2, 7).toUpperCase();
             const gameRef = doc(db, `artifacts/${appId}/public/data/codenames-games`, gameId);
             const startingTeam = Math.random() < 0.5 ? 'blue' : 'red';
@@ -173,20 +177,22 @@
                 clue: { word: '', number: 0 },
                 guessesLeft: 0
             };
-            gameData.players[user.uid] = { name: playerNameInput.value, team: null, role: null };
+            gameData.players[user.uid] = { name: playerName, team: null, role: null };
             await setDoc(gameRef, gameData);
             joinGame(gameId);
         }
 
         async function joinGame(gameIdOverride = null) {
-            if (!validateInputs()) return;
+            if (!user) { showError("Connecting... please wait a moment."); return; }
+            const playerName = playerNameInput.value.trim() || `Player${Math.floor(Math.random() * 900) + 100}`;
+
             const gameId = (gameIdOverride || joinGameIdInput.value.toUpperCase().trim());
             if (!gameId) { showError("Please enter a game code."); return; }
             const gameRef = doc(db, `artifacts/${appId}/public/data/codenames-games`, gameId);
             const gameSnap = await getDoc(gameRef);
             if (gameSnap.exists()) {
                 currentGameId = gameId;
-                await updateDoc(gameRef, { [`players.${user.uid}`]: { name: playerNameInput.value, team: null, role: null } });
+                await updateDoc(gameRef, { [`players.${user.uid}`]: { name: playerName, team: null, role: null } });
                 startScreen.classList.add('hidden');
                 gameScreen.classList.remove('hidden');
                 if (gameUnsubscribe) gameUnsubscribe();
@@ -410,7 +416,6 @@
         }
 
         function generateKeyMap(s) { const i = ['assassin',...Array(7).fill('neutral'),...Array(8).fill(s==='blue'?'red':'blue'),...Array(9).fill(s)]; return i.sort(()=>Math.random()-0.5); }
-        function validateInputs() { if (!playerNameInput.value.trim()) { showError("Please enter your name."); return false; } if(!user) { showError("Authenticating... please wait."); return false; } return true; }
         function showError(msg) { startErrorEl.textContent = msg; setTimeout(() => startErrorEl.textContent = '', 3000); }
         function checkTeamComposition(players) { let blueSpymaster=false, redSpymaster=false, bluePlayers=0, redPlayers=0; Object.values(players).forEach(p=>{ if(p.team==='blue'){ bluePlayers++; if(p.role==='spymaster') blueSpymaster=true; } else if(p.team==='red'){ redPlayers++; if(p.role==='spymaster') redSpymaster=true; } }); return {blueSpymaster, redSpymaster, bluePlayers, redPlayers}; }
         gameIdDisplay.addEventListener('click', () => {
